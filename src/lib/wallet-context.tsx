@@ -17,6 +17,7 @@ import { DEFAULT_NETWORK, NETWORKS, type NetworkId } from '@/constants/networks'
 
 const MNEMONIC_KEY = 'discreet.mnemonic';
 const NETWORK_KEY = 'discreet.network';
+const ADDRESS_KEY = (net: NetworkId) => `discreet.address.${net}`;
 const SYNC_INTERVAL_MS = 60_000;
 
 interface WalletState {
@@ -59,20 +60,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     transactions: [],
   });
   const walletRef = useRef<LygosWallet | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   // Bumped on every network switch so stale async work can't write state.
   const generationRef = useRef(0);
 
   const readWallet = useCallback(async (gen: number) => {
     const wallet = walletRef.current;
     if (!wallet || generationRef.current !== gen) return;
-    const [balance, transactions, { address }] = await Promise.all([
+    const [balance, transactions] = await Promise.all([
       wallet.getBalance(),
       wallet.listTransactions(),
-      wallet.getNewAddress(),
     ]);
     if (generationRef.current !== gen) return;
-    transactions.sort((a, b) => (b.timestamp ?? Infinity) < (a.timestamp ?? Infinity) ? -1 : 1);
-    setState((s) => ({ ...s, status: 'ready', balance, transactions, address }));
+    transactions.sort(
+      (a, b) => (b.timestamp ?? Infinity) - (a.timestamp ?? Infinity)
+    );
+    setState((s) => ({ ...s, status: 'ready', balance, transactions }));
   }, []);
 
   const boot = useCallback(
@@ -94,6 +98,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // ponytail: always fullScan — bdk-ffi's incremental esplora sync()
         // hangs indefinitely against mempool.space testnet4 (fullScan works).
         // Switch back to sync() once that's fixed upstream in bdk-rn.
+        // Reuse the last shown address — revealing a new one on every boot or
+        // sync would move the address out from under anyone mid-payment.
+        let address = await AsyncStorage.getItem(ADDRESS_KEY(network));
+        if (!address) {
+          address = (await wallet.getNewAddress()).address;
+          await AsyncStorage.setItem(ADDRESS_KEY(network), address);
+        }
+        if (generationRef.current !== gen) return;
+        setState((s) => ({ ...s, address: address ?? undefined }));
         await wallet.fullScan();
         console.log(`[wallet] boot ${network} scanned`);
         await readWallet(gen);
@@ -145,6 +158,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const wallet = walletRef.current;
     if (!wallet) throw new Error('wallet not ready');
     const { address } = await wallet.getNewAddress();
+    await AsyncStorage.setItem(ADDRESS_KEY(stateRef.current.network), address);
     setState((s) => ({ ...s, address }));
     return address;
   }, []);
