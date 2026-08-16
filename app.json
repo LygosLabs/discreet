@@ -8,7 +8,8 @@
     "scheme": "discreet",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.mblackmblack.discreet"
     },
     "android": {
       "adaptiveIcon": {

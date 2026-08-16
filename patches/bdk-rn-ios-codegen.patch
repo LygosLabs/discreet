@@ -1,0 +1,18 @@
+diff --git a/package.json b/package.json
+index ab9ae5d..6f5405d 100644
+--- a/package.json
++++ b/package.json
+@@ -167,6 +167,13 @@
+     "jsSrcsDir": "src",
+     "android": {
+       "javaPackageName": "com.bdkrn"
++    },
++    "ios": {
++      "modules": {
++        "BdkRn": {
++          "className": "BdkRn"
++        }
++      }
+     }
+   },
+   "create-react-native-library": {
