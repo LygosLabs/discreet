@@ -1,48 +1,16 @@
-import { Network } from 'bdk-rn';
-import { useCallback, useEffect, useState } from 'react';
-import { LygosWallet } from 'wallet';
-import { Button, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnimatedIcon } from '@/components/animated-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { NETWORKS } from '@/constants/networks';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useWallet } from '@/lib/wallet-context';
 
-// ponytail: throwaway M0 gate screen — proves bdk-rn + ddk-rn + wallet build
-// and sync under the Expo prebuild. Replaced by the real wallet tab in M1.
-const TESTNET4_ESPLORA = 'https://mempool.space/testnet4/api';
-
+// ponytail: bets land here in M2; until then Home is a status card.
 export default function HomeScreen() {
-  const [status, setStatusState] = useState('M0 gate: not run');
-  const setStatus = useCallback((s: string) => {
-    console.log(`[m0-gate] ${s}`);
-    setStatusState(s);
-  }, []);
-
-  const runM0Gate = useCallback(async () => {
-    try {
-      setStatus('creating testnet4 wallet…');
-      const wallet = await LygosWallet.create({
-        mnemonic: LygosWallet.generateMnemonic(12),
-        network: Network.Testnet4,
-        esploraUrl: TESTNET4_ESPLORA,
-        dbPath: ':memory:',
-      });
-      setStatus('syncing…');
-      await wallet.fullScan();
-      const balance = await wallet.getBalance();
-      const { address } = await wallet.getNewAddress();
-      setStatus(`PASS — balance ${balance.totalSats} sats\n${address}`);
-    } catch (e) {
-      setStatus(`FAIL — ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }, [setStatus]);
-
-  useEffect(() => {
-    runM0Gate();
-  }, [runM0Gate]);
-
+  const wallet = useWallet();
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -55,9 +23,11 @@ export default function HomeScreen() {
         </ThemedView>
 
         <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <Button title="Run M0 gate (testnet4 balance)" onPress={runM0Gate} />
-          <ThemedText type="code" style={styles.status}>
-            {status}
+          <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+            {NETWORKS[wallet.network].label} · {wallet.status}
+          </ThemedText>
+          <ThemedText style={styles.center}>
+            No bets yet — offer and accept flows arrive in M2.
           </ThemedText>
         </ThemedView>
       </SafeAreaView>
@@ -96,7 +66,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.four,
     borderRadius: Spacing.four,
   },
-  status: {
-    textAlign: 'center',
-  },
+  center: { textAlign: 'center' },
 });

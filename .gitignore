@@ -44,3 +44,7 @@ example
 
 # yarn berry
 .yarn/
+
+# local tooling
+.claude/
+.vscode/
