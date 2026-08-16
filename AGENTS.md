@@ -23,4 +23,10 @@ Wallet layer = `@lygos/wallet` (LygosLabs/wallet git submodule at `wallet/`): bd
 - `just install` → pull submodules + apply `patches/` + build bdk-rn + yarn install
 - `npx expo prebuild -p ios && npx expo run:ios` → dev client
 - `patches/` carries codegen fixes the submodules need under RN 0.86 (`codegenConfig.ios.modules`); upstream to LygosLabs/wallet and bitcoindevkit/bdk-rn, delete when merged
+## Known upstream limits (bdk-rn / bdk-ffi)
+
+- **Esplora scans block the JS thread.** bdk-ffi builds the *blocking* esplora client (`build_blocking()`) and uniffi exposes it synchronously, so `fullScan`/`sync` do their HTTP I/O on the JS thread and freeze the UI. Keep scans user-initiated and the gap limit small; no background sync timer. Fix is an async esplora client upstream.
+- **`sync()` (incremental) hangs** against mempool.space testnet4 where `fullScan()` works — the app always fullScans.
+- Both `patches/` codegen fixes belong upstream too.
+
 - Metro (`metro.config.js`) must keep: `wallet-source` condition, watchFolders for the submodules, and the react/react-native singleton redirect (bdk-rn's nested node_modules ships its own react-native — bundling it breaks TurboModule lookup)

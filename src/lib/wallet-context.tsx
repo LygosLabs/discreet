@@ -18,7 +18,12 @@ import { DEFAULT_NETWORK, NETWORKS, type NetworkId } from '@/constants/networks'
 const MNEMONIC_KEY = 'discreet.mnemonic';
 const NETWORK_KEY = 'discreet.network';
 const ADDRESS_KEY = (net: NetworkId) => `discreet.address.${net}`;
-const SYNC_INTERVAL_MS = 60_000;
+// bdk-ffi builds the *blocking* esplora client and uniffi exposes it
+// synchronously, so every scan runs its HTTP I/O on the JS thread and freezes
+// the UI for its duration. Keep scans user-initiated (boot, Refresh, after a
+// send) — no background timer — and keep the gap small so they stay short.
+// Revisit when bdk-ffi ships an async esplora client.
+const STOP_GAP = 10n;
 
 interface WalletState {
   network: NetworkId;
@@ -90,6 +95,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           mnemonic,
           network: NETWORKS[network].network,
           esploraUrl: NETWORKS[network].esploraUrl,
+          esplora: { stopGap: STOP_GAP },
           dbPath: dbPathFor(network),
         });
         if (generationRef.current !== gen) return;
@@ -129,21 +135,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       boot(saved && saved in NETWORKS ? saved : DEFAULT_NETWORK);
     })();
   }, [boot]);
-
-  useEffect(() => {
-    const id = setInterval(async () => {
-      const gen = generationRef.current;
-      const wallet = walletRef.current;
-      if (!wallet) return;
-      try {
-        await wallet.fullScan();
-        await readWallet(gen);
-      } catch {
-        // transient esplora failures — next tick retries
-      }
-    }, SYNC_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [readWallet]);
 
   const refresh = useCallback(async () => {
     const gen = generationRef.current;

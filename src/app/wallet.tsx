@@ -28,6 +28,7 @@ export default function WalletScreen() {
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  const syncing = wallet.status === 'syncing' || wallet.status === 'loading';
 
   const confirmSwitch = (target: NetworkId) => {
     if (target === wallet.network) return;
@@ -134,7 +135,11 @@ export default function WalletScreen() {
           spendable {sats(wallet.balance?.spendableSats)} · pending{' '}
           {sats(wallet.balance?.untrustedPendingSats)}
         </ThemedText>
-        <Button title="Refresh" onPress={wallet.refresh} />
+        <Button
+          title={syncing ? 'Scanning — app will freeze…' : 'Refresh'}
+          disabled={syncing}
+          onPress={wallet.refresh}
+        />
       </ThemedView>
 
       <ThemedView type="backgroundElement" style={styles.card}>
