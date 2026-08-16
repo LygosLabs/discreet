@@ -17,8 +17,7 @@ import { DEFAULT_NETWORK, NETWORKS, type NetworkId } from '@/constants/networks'
 
 const MNEMONIC_KEY = 'discreet.mnemonic';
 const NETWORK_KEY = 'discreet.network';
-const SCANNED_KEY = (net: NetworkId) => `discreet.scanned.${net}`;
-const SYNC_INTERVAL_MS = 30_000;
+const SYNC_INTERVAL_MS = 60_000;
 
 interface WalletState {
   network: NetworkId;
@@ -92,14 +91,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (generationRef.current !== gen) return;
         walletRef.current = wallet;
         setState((s) => ({ ...s, status: 'syncing' }));
-        const scanned = await AsyncStorage.getItem(SCANNED_KEY(network));
-        if (scanned) {
-          await wallet.sync();
-        } else {
-          await wallet.fullScan();
-          await AsyncStorage.setItem(SCANNED_KEY(network), '1');
-        }
+        // ponytail: always fullScan — bdk-ffi's incremental esplora sync()
+        // hangs indefinitely against mempool.space testnet4 (fullScan works).
+        // Switch back to sync() once that's fixed upstream in bdk-rn.
+        await wallet.fullScan();
+        console.log(`[wallet] boot ${network} scanned`);
         await readWallet(gen);
+        console.log(`[wallet] boot ${network} ready`);
       } catch (e) {
         if (generationRef.current !== gen) return;
         setState((s) => ({
@@ -125,7 +123,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const wallet = walletRef.current;
       if (!wallet) return;
       try {
-        await wallet.sync();
+        await wallet.fullScan();
         await readWallet(gen);
       } catch {
         // transient esplora failures — next tick retries
@@ -139,7 +137,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const wallet = walletRef.current;
     if (!wallet) return;
     setState((s) => ({ ...s, status: 'syncing' }));
-    await wallet.sync();
+    await wallet.fullScan();
     await readWallet(gen);
   }, [readWallet]);
 
