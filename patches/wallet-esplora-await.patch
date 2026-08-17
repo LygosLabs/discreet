@@ -1,0 +1,162 @@
+diff --git a/src/LygosWallet.ts b/src/LygosWallet.ts
+index d3a0777..0765a1d 100644
+--- a/src/LygosWallet.ts
++++ b/src/LygosWallet.ts
+@@ -340,8 +340,8 @@ export class LygosWallet {
+    * the contract tracker. Use `fullScan` on recovery from seed.
+    */
+   async sync(): Promise<void> {
+-    this.refreshFeeEstimates();
+-    const update = this.esplora.sync(
++    await this.refreshFeeEstimates();
++    const update = await this.esplora.sync(
+       this.bdk.startSyncWithRevealedSpks().build(),
+       this.parallelRequests
+     );
+@@ -352,11 +352,11 @@ export class LygosWallet {
+   }
+ 
+   /** Full descriptor gap-scan over both keychains. Needed once after restoring from seed. */
+-  async fullScan(): Promise<void> {
+-    this.refreshFeeEstimates();
+-    const update = this.esplora.fullScan(
++  async fullScan(opts?: { stopGap?: bigint }): Promise<void> {
++    await this.refreshFeeEstimates();
++    const update = await this.esplora.fullScan(
+       this.bdk.startFullScan().build(),
+-      this.stopGap,
++      opts?.stopGap ?? this.stopGap,
+       this.parallelRequests
+     );
+     this.emitWalletEvents(this.bdk.applyUpdateEvents(update));
+@@ -469,6 +469,49 @@ export class LygosWallet {
+     return { address: info.address.toString(), index: info.index };
+   }
+ 
++  /**
++   * The address to show on a receive screen: the first revealed-but-unused
++   * one, so it stays put until the chain says it was paid. Use this
++   * everywhere except an explicit "new address" action — `getNewAddress`
++   * burns an index on every call.
++   */
++  async getReceiveAddress(): Promise<{ address: string; index: number }> {
++    const info = this.bdk.nextUnusedAddress(KeychainKind.External);
++    this.bdk.persist(this.persister);
++    return { address: info.address.toString(), index: info.index };
++  }
++
++  /** Derives an address locally — no network, no state change. */
++  peekAddress(
++    index: number,
++    keychain: 'external' | 'internal' = 'external'
++  ): string {
++    const kind =
++      keychain === 'external' ? KeychainKind.External : KeychainKind.Internal;
++    return this.bdk.peekAddress(kind, index).address.toString();
++  }
++
++  /** Highest index handed out so far, or undefined if none. */
++  revealedIndex(
++    keychain: 'external' | 'internal' = 'external'
++  ): number | undefined {
++    const kind =
++      keychain === 'external' ? KeychainKind.External : KeychainKind.Internal;
++    return this.bdk.derivationIndex(kind);
++  }
++
++  /**
++   * Marks every index up to `index` as revealed so an incremental `sync`
++   * covers them — the cheap way to recover funds paid to an address beyond
++   * the current gap without a wide `fullScan`.
++   */
++  revealTo(index: number, keychain: 'external' | 'internal' = 'external'): void {
++    const kind =
++      keychain === 'external' ? KeychainKind.External : KeychainKind.Internal;
++    this.bdk.revealAddressesTo(kind, index);
++    this.bdk.persist(this.persister);
++  }
++
+   // ------------------------------------------------------------------ fees
+ 
+   /**
+@@ -497,9 +540,9 @@ export class LygosWallet {
+   }
+ 
+   /** A failed fetch keeps the cached rates and never fails the sync. */
+-  private refreshFeeEstimates(): void {
++  private async refreshFeeEstimates(): Promise<void> {
+     try {
+-      this.feeEstimates = this.esplora.getFeeEstimates();
++      this.feeEstimates = await this.esplora.getFeeEstimates();
+     } catch {
+       // keep the previous cache
+     }
+@@ -536,7 +579,7 @@ export class LygosWallet {
+         options.excludeBelowConfirmations
+       );
+     }
+-    return this.signAndBroadcast(builder.finish(this.bdk));
++    return await this.signAndBroadcast(builder.finish(this.bdk));
+   }
+ 
+   /** Sends all spendable funds to the address. Returns the txid. */
+@@ -547,7 +590,7 @@ export class LygosWallet {
+       .drainTo(script)
+       .feeRate(FeeRate.fromSatPerVb(feeRatePerVb ?? this.estimateFeeRate()))
+       .finish(this.bdk);
+-    return this.signAndBroadcast(psbt);
++    return await this.signAndBroadcast(psbt);
+   }
+ 
+   /** Fee-bumps a stuck (RBF) transaction. Returns the replacement txid. */
+@@ -556,21 +599,28 @@ export class LygosWallet {
+       Txid.fromString(txid),
+       FeeRate.fromSatPerVb(feeRatePerVb)
+     ).finish(this.bdk);
+-    return this.signAndBroadcast(psbt);
++    return await this.signAndBroadcast(psbt);
+   }
+ 
+   /** Broadcasts consensus-serialized transaction bytes. Returns the txid. */
+   async broadcastTx(txBytes: BytesLike): Promise<string> {
+     const tx = new BdkTransaction(toArrayBuffer(txBytes));
+-    this.esplora.broadcast(tx);
++    await this.esplora.broadcast(tx);
+     return tx.computeTxid().toString();
+   }
+ 
+   /** The one build-sign-broadcast path every send flows through. */
+-  private signAndBroadcast(psbt: PsbtLike): string {
++  private async signAndBroadcast(psbt: PsbtLike): Promise<string> {
+     this.bdk.sign(psbt, undefined);
+     const tx = psbt.extractTx();
+-    this.esplora.broadcast(tx);
++    await this.esplora.broadcast(tx);
++    // Apply our own tx locally so the spend, change and pending balance show
++    // up immediately — no chain scan needed after a send.
++    this.emitWalletEvents(
++      this.bdk.applyUnconfirmedTxsEvents([
++        { tx, lastSeen: BigInt(Math.floor(Date.now() / 1000)) },
++      ])
++    );
+     this.bdk.persist(this.persister);
+     return tx.computeTxid().toString();
+   }
+@@ -1051,7 +1101,7 @@ export class LygosWallet {
+       let changed = false;
+ 
+       if (!updated.confirmed) {
+-        const info = this.esplora.getTxInfo(Txid.fromString(updated.txid));
++        const info = await this.esplora.getTxInfo(Txid.fromString(updated.txid));
+         if (info?.status.confirmed) {
+           updated.confirmed = true;
+           changed = true;
+@@ -1068,7 +1118,7 @@ export class LygosWallet {
+         }
+       }
+ 
+-      const status = this.esplora.getOutputStatus(
++      const status = await this.esplora.getOutputStatus(
+         Txid.fromString(updated.txid),
+         BigInt(updated.vout)
+       );

@@ -1,0 +1,108 @@
+--- a/bdk-ffi/src/esplora.rs
++++ b/bdk-ffi/src/esplora.rs
+@@ -119,11 +119,21 @@
+     }
+ 
+     /// Broadcast a [`Transaction`] to Esplora.
+-    pub fn broadcast(&self, transaction: &Transaction) -> Result<(), EsploraError> {
++    pub async fn broadcast(&self, transaction: &Transaction) -> Result<(), EsploraError> {
+         let bdk_transaction: BdkTransaction = transaction.into();
+-        self.0
+-            .broadcast(&bdk_transaction)
+-            .map_err(EsploraError::from)
++        let client = self.0.clone();
++        crate::run_async(async move {
++            tokio::task::spawn_blocking(move || -> Result<(), EsploraError> {
++                client
++                    .broadcast(&bdk_transaction)
++                    .map_err(EsploraError::from)
++            })
++            .await
++            .map_err(|e| EsploraError::Parsing {
++                error_message: e.to_string(),
++            })?
++        })
++        .await
+     }
+ 
+     /// Get a [`Transaction`] option given its [`Txid`].
+@@ -156,8 +166,18 @@
+ 
+     /// Get a map where the key is the confirmation target (in number of
+     /// blocks) and the value is the estimated feerate (in sat/vB).
+-    pub fn get_fee_estimates(&self) -> Result<HashMap<u16, f64>, EsploraError> {
+-        self.0.get_fee_estimates().map_err(EsploraError::from)
++    pub async fn get_fee_estimates(&self) -> Result<HashMap<u16, f64>, EsploraError> {
++        let client = self.0.clone();
++        crate::run_async(async move {
++            tokio::task::spawn_blocking(move || -> Result<HashMap<u16, f64>, EsploraError> {
++                client.get_fee_estimates().map_err(EsploraError::from)
++            })
++            .await
++            .map_err(|e| EsploraError::Parsing {
++                error_message: e.to_string(),
++            })?
++        })
++        .await
+     }
+ 
+     /// Get the [`BlockHash`] of a specific block height.
+@@ -208,11 +228,22 @@
+     }
+ 
+     /// Get transaction info given its [`Txid`].
+-    pub fn get_tx_info(&self, txid: Arc<Txid>) -> Result<Option<Tx>, EsploraError> {
+-        self.0
+-            .get_tx_info(&txid.0)
+-            .map(|tx| tx.map(Tx::from))
+-            .map_err(EsploraError::from)
++    pub async fn get_tx_info(&self, txid: Arc<Txid>) -> Result<Option<Tx>, EsploraError> {
++        let client = self.0.clone();
++        let txid = txid.0;
++        crate::run_async(async move {
++            tokio::task::spawn_blocking(move || -> Result<Option<Tx>, EsploraError> {
++                client
++                    .get_tx_info(&txid)
++                    .map(|tx| tx.map(Tx::from))
++                    .map_err(EsploraError::from)
++            })
++            .await
++            .map_err(|e| EsploraError::Parsing {
++                error_message: e.to_string(),
++            })?
++        })
++        .await
+     }
+ 
+     /// Get transaction history for the specified address, sorted with newest first.
+@@ -241,14 +272,25 @@
+ 
+     /// Get the spending status of an output given a `Txid` and the output
+     /// index.
+-    pub fn get_output_status(
++    pub async fn get_output_status(
+         &self,
+         txid: Arc<Txid>,
+         vout: u64,
+     ) -> Result<Option<OutputStatus>, EsploraError> {
+-        self.0
+-            .get_output_status(&txid.0, vout)
+-            .map(|status| status.map(OutputStatus::from))
+-            .map_err(EsploraError::from)
++        let client = self.0.clone();
++        let txid = txid.0;
++        crate::run_async(async move {
++            tokio::task::spawn_blocking(move || -> Result<Option<OutputStatus>, EsploraError> {
++                client
++                    .get_output_status(&txid, vout)
++                    .map(|status| status.map(OutputStatus::from))
++                    .map_err(EsploraError::from)
++            })
++            .await
++            .map_err(|e| EsploraError::Parsing {
++                error_message: e.to_string(),
++            })?
++        })
++        .await
+     }
+ }

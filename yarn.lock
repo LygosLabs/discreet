@@ -1878,6 +1878,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@react-native-async-storage/async-storage@npm:2.2.0":
+  version: 2.2.0
+  resolution: "@react-native-async-storage/async-storage@npm:2.2.0"
+  dependencies:
+    merge-options: "npm:^3.0.4"
+  peerDependencies:
+    react-native: ^0.0.0-0 || >=0.65 <1.0
+  checksum: 10c0/84900eba46a40225c4ac9bf5eb58885200dc1e789d873ecda46a2a213870cc7110536ed1fd7a74b873071f3603c093958fbd84c635d6f6d4f94bfbb616ffa0ef
+  languageName: node
+  linkType: hard
+
 "@react-native-masked-view/masked-view@npm:^0.3.2":
   version: 0.3.2
   resolution: "@react-native-masked-view/masked-view@npm:0.3.2"
@@ -3003,9 +3014,11 @@ __metadata:
   dependencies:
     "@bennyblader/ddk-rn": "npm:1.0.0-rc1"
     "@expo/ui": "npm:~57.0.11"
+    "@react-native-async-storage/async-storage": "npm:2.2.0"
     "@types/react": "npm:~19.2.2"
     bdk-rn: "portal:./wallet/bdk-rn"
     expo: "npm:~57.0.13"
+    expo-clipboard: "npm:~57.0.1"
     expo-constants: "npm:~57.0.11"
     expo-dev-client: "npm:~57.0.12"
     expo-device: "npm:~57.0.1"
@@ -3014,6 +3027,7 @@ __metadata:
     expo-image: "npm:~57.0.3"
     expo-linking: "npm:~57.0.6"
     expo-router: "npm:~57.0.13"
+    expo-secure-store: "npm:~57.0.1"
     expo-splash-screen: "npm:~57.0.6"
     expo-status-bar: "npm:~57.0.1"
     expo-symbols: "npm:~57.0.2"
@@ -3159,6 +3173,17 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10c0/8b53ca3dc0a35dd04da9a3e62c4b2f6e23ef26bd938b7d33f33384249d103293bc0e30448cf086cc59e31d01c01ac2d89ae0fa343c0afb99d6ae9b0f96c38c85
+  languageName: node
+  linkType: hard
+
+"expo-clipboard@npm:~57.0.1":
+  version: 57.0.1
+  resolution: "expo-clipboard@npm:57.0.1"
+  peerDependencies:
+    expo: "*"
+    react: "*"
+    react-native: "*"
+  checksum: 10c0/b76cb6c8b6503e0d0e5c4bf6935f42fe0eb26716e56bb45fbed1bb4dca9c5ad1b805993ca981d5f8afab5e8333008b1e58878bfa794c1225470b0627f653675a
   languageName: node
   linkType: hard
 
@@ -3431,6 +3456,15 @@ __metadata:
     react-server-dom-webpack:
       optional: true
   checksum: 10c0/31648f679051b1e5bfd023e7228714f820905c12b67b99862498e9e1bd09715363de72ff83b70e674140c030e4cbf1f78be4fed774ef78985e92ff9626e118ce
+  languageName: node
+  linkType: hard
+
+"expo-secure-store@npm:~57.0.1":
+  version: 57.0.1
+  resolution: "expo-secure-store@npm:57.0.1"
+  peerDependencies:
+    expo: "*"
+  checksum: 10c0/79439f0e4e38a4668da57a0262867a558f9e37bb657d627ce8e19cb3db9a3de003eacb95f738c6dba9a1ba644bd94aab31b6e906dd87d36a911dbd00a4ea128c
   languageName: node
   linkType: hard
 
@@ -3970,6 +4004,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"is-plain-obj@npm:^2.1.0":
+  version: 2.1.0
+  resolution: "is-plain-obj@npm:2.1.0"
+  checksum: 10c0/e5c9814cdaa627a9ad0a0964ded0e0491bfd9ace405c49a5d63c88b30a162f1512c069d5b80997893c4d0181eadc3fed02b4ab4b81059aba5620bfcdfdeb9c53
+  languageName: node
+  linkType: hard
+
 "is-wsl@npm:^2.1.1, is-wsl@npm:^2.2.0":
   version: 2.2.0
   resolution: "is-wsl@npm:2.2.0"
@@ -4329,6 +4370,15 @@ __metadata:
   version: 6.0.0
   resolution: "memoize-one@npm:6.0.0"
   checksum: 10c0/45c88e064fd715166619af72e8cf8a7a17224d6edf61f7a8633d740ed8c8c0558a4373876c9b8ffc5518c2b65a960266adf403cc215cb1e90f7e262b58991f54
+  languageName: node
+  linkType: hard
+
+"merge-options@npm:^3.0.4":
+  version: 3.0.4
+  resolution: "merge-options@npm:3.0.4"
+  dependencies:
+    is-plain-obj: "npm:^2.1.0"
+  checksum: 10c0/02b5891ceef09b0b497b5a0154c37a71784e68ed71b14748f6fd4258ffd3fe4ecd5cb0fd6f7cae3954fd11e7686c5cb64486daffa63c2793bbe8b614b61c7055
   languageName: node
   linkType: hard
 
