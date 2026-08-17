@@ -13,10 +13,22 @@ pull:
     git submodule update --init --recursive wallet
     just apply-patches
 
-[doc("Apply the codegen patches the submodules need under RN 0.86 (no-ops if already applied). Upstream: LygosLabs/wallet + bitcoindevkit/bdk-rn.")]
+[doc("Apply every patch the submodules need (no-ops if already applied): RN 0.86 codegen fixes, bdk-rn's own async-esplora patches, and our additive ones.")]
 apply-patches:
     cd wallet && { git apply --reverse --check ../patches/wallet-ios-codegen.patch 2>/dev/null || git apply ../patches/wallet-ios-codegen.patch; }
     cd wallet/bdk-rn && { git apply --reverse --check ../../patches/bdk-rn-ios-codegen.patch 2>/dev/null || git apply ../../patches/bdk-rn-ios-codegen.patch; }
+    # bdk-rn ships these against its own pinned bdk-ffi — without them esplora is
+    # the blocking client and every scan freezes the JS thread. Upstream applies
+    # them via `just submodule-apply-patch`, which we can't use: it starts with
+    # `git reset --hard` and would wipe the additive patch below.
+    cd wallet/bdk-rn/bdk-ffi && for p in cargo lib esplora electrum; do \
+        git apply --reverse --check -C1 "../patches/bdk-ffi-async-sync-$p.patch" 2>/dev/null \
+        || git apply -C1 "../patches/bdk-ffi-async-sync-$p.patch"; \
+    done
+    # ours: the four methods upstream left synchronous that LygosWallet calls
+    # on every sync (broadcast, fee estimates, and 2x per open contract).
+    cd wallet/bdk-rn/bdk-ffi && { git apply --reverse --check -C1 ../../../patches/bdk-ffi-esplora-async-extra.patch 2>/dev/null || git apply -C1 ../../../patches/bdk-ffi-esplora-async-extra.patch; }
+    cd wallet && { git apply --reverse --check ../patches/wallet-esplora-await.patch 2>/dev/null || git apply ../patches/wallet-esplora-await.patch; }
 
 [doc("Build bdk-rn inside the wallet submodule: JS deps, Rust targets, native bindings, TS lib.")]
 bdk-build target="ios":

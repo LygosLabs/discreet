@@ -24,7 +24,7 @@ export default function HomeScreen() {
 
         <ThemedView type="backgroundElement" style={styles.stepContainer}>
           <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-            {NETWORKS[wallet.network].label} · {wallet.status}
+            {NETWORKS[wallet.network].label} · {wallet.phase.kind}
           </ThemedText>
           <ThemedText style={styles.center}>
             No bets yet — offer and accept flows arrive in M2.

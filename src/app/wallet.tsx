@@ -1,9 +1,11 @@
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Button,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -21,6 +23,14 @@ function sats(v?: bigint): string {
   return v === undefined ? '—' : `${v.toLocaleString()} sats`;
 }
 
+function ago(at?: number): string {
+  if (!at) return 'never';
+  const s = Math.floor((Date.now() - at) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
 export default function WalletScreen() {
   const wallet = useWallet();
   const theme = useTheme();
@@ -28,10 +38,15 @@ export default function WalletScreen() {
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
-  const syncing = wallet.status === 'syncing' || wallet.status === 'loading';
+
+  const phase = wallet.phase;
+  const working = phase.kind !== 'idle';
+  const pendingSats =
+    wallet.balance &&
+    wallet.balance.trustedPendingSats + wallet.balance.untrustedPendingSats;
 
   const confirmSwitch = (target: NetworkId) => {
-    if (target === wallet.network) return;
+    if (target === wallet.network || working) return;
     if (target === 'bitcoin') {
       Alert.alert(
         'Switch to mainnet?',
@@ -73,6 +88,20 @@ export default function WalletScreen() {
     Alert.alert('Copied', wallet.address);
   };
 
+  const recover = async () => {
+    try {
+      const last = await wallet.findMissingFunds();
+      Alert.alert(
+        'Scan complete',
+        last < 0
+          ? 'No payments found to any address in this wallet.'
+          : `Highest used address: index ${last}. Balance updated.`
+      );
+    } catch (e) {
+      Alert.alert('Scan failed', e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const input = {
     backgroundColor: theme.backgroundElement,
     color: theme.text,
@@ -83,6 +112,13 @@ export default function WalletScreen() {
   return (
     <ScrollView
       style={{ backgroundColor: theme.background }}
+      refreshControl={
+        <RefreshControl
+          refreshing={phase.kind === 'scanning'}
+          onRefresh={wallet.refresh}
+          tintColor={theme.textSecondary}
+        />
+      }
       contentContainerStyle={[
         styles.content,
         {
@@ -102,6 +138,7 @@ export default function WalletScreen() {
                 {
                   backgroundColor:
                     id === wallet.network ? theme.text : theme.backgroundElement,
+                  opacity: working && id !== wallet.network ? 0.4 : 1,
                 },
               ]}>
               <ThemedText
@@ -125,22 +162,43 @@ export default function WalletScreen() {
       )}
 
       <ThemedView type="backgroundElement" style={styles.card}>
+        <ThemedView style={styles.balanceRow}>
+          <ThemedText type="title" style={{ opacity: working ? 0.45 : 1 }}>
+            {sats(wallet.balance?.totalSats)}
+          </ThemedText>
+          {working && <ActivityIndicator />}
+        </ThemedView>
         <ThemedText type="small" themeColor="textSecondary">
-          {wallet.status === 'error'
-            ? `error: ${wallet.error}`
-            : wallet.status}
+          spendable {sats(wallet.balance?.spendableSats)}
+          {pendingSats !== undefined && pendingSats > 0n
+            ? ` · pending ${sats(pendingSats)}`
+            : ''}
         </ThemedText>
-        <ThemedText type="title">{sats(wallet.balance?.totalSats)}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          spendable {sats(wallet.balance?.spendableSats)} · pending{' '}
-          {sats(wallet.balance?.untrustedPendingSats)}
+          {phase.kind === 'probing'
+            ? `Checking addresses ${phase.checked}/${phase.total}`
+            : phase.kind === 'scanning'
+              ? 'Scanning the chain…'
+              : phase.kind === 'loading'
+                ? 'Opening wallet…'
+                : wallet.error
+                  ? `error: ${wallet.error}`
+                  : `Updated ${ago(wallet.lastSyncedAt)}`}
         </ThemedText>
-        <Button
-          title={syncing ? 'Scanning — app will freeze…' : 'Refresh'}
-          disabled={syncing}
-          onPress={wallet.refresh}
-        />
+        <Button title="Refresh" disabled={working} onPress={wallet.refresh} />
       </ThemedView>
+
+      {wallet.incoming && (
+        <ThemedView type="backgroundElement" style={[styles.card, styles.incoming]}>
+          <ThemedText type="smallBold">
+            ≈ +{wallet.incoming.sats.toLocaleString()} sats seen on chain
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Not counted in the balance until a sync confirms it.
+          </ThemedText>
+          <Button title="Sync now" disabled={working} onPress={wallet.refresh} />
+        </ThemedView>
+      )}
 
       <ThemedView type="backgroundElement" style={styles.card}>
         <ThemedText type="subtitle">Receive</ThemedText>
@@ -151,7 +209,11 @@ export default function WalletScreen() {
         </Pressable>
         <ThemedView style={styles.buttonRow}>
           <Button title="Copy" onPress={copyAddress} />
-          <Button title="New address" onPress={() => wallet.newAddress()} />
+          <Button
+            title="New address"
+            disabled={working}
+            onPress={() => wallet.newAddress()}
+          />
         </ThemedView>
       </ThemedView>
 
@@ -175,14 +237,22 @@ export default function WalletScreen() {
           onChangeText={(t) => setAmount(t.replace(/[^0-9]/g, ''))}
         />
         <ThemedView style={styles.buttonRow}>
-          <Button title="Send" disabled={busy} onPress={() => doSend(false)} />
+          <Button
+            title="Send"
+            disabled={busy || working}
+            onPress={() => doSend(false)}
+          />
           <Button
             title="Send all"
-            disabled={busy}
+            disabled={busy || working}
             onPress={() =>
               Alert.alert('Send everything?', 'Sweeps the whole balance.', [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Send all', style: 'destructive', onPress: () => doSend(true) },
+                {
+                  text: 'Send all',
+                  style: 'destructive',
+                  onPress: () => doSend(true),
+                },
               ])
             }
           />
@@ -207,9 +277,7 @@ export default function WalletScreen() {
                 </ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   {tx.label ??
-                    (tx.confirmed
-                      ? `block ${tx.blockHeight}`
-                      : 'unconfirmed')}
+                    (tx.confirmed ? `block ${tx.blockHeight}` : 'pending')}
                 </ThemedText>
               </ThemedView>
               <ThemedText type="small" themeColor="textSecondary">
@@ -218,6 +286,18 @@ export default function WalletScreen() {
             </ThemedView>
           );
         })}
+      </ThemedView>
+
+      <ThemedView type="backgroundElement" style={styles.card}>
+        <ThemedText type="small" themeColor="textSecondary">
+          Missing a payment? A deep scan checks every address this wallet has
+          ever handed out.
+        </ThemedText>
+        <Button
+          title="Find missing funds"
+          disabled={working}
+          onPress={recover}
+        />
       </ThemedView>
     </ScrollView>
   );
@@ -247,6 +327,13 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.two,
   },
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    backgroundColor: 'transparent',
+  },
+  incoming: { borderWidth: 1, borderStyle: 'dashed', borderColor: '#d97706' },
   mainnetBanner: { backgroundColor: '#7f1d1d' },
   mainnetText: { color: '#fecaca', textAlign: 'center' },
   address: { flexWrap: 'wrap' },
