@@ -130,8 +130,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return BigInt(Math.max(BASE_GAP, lastActive + BASE_GAP));
   }, []);
 
+  /**
+   * `deep` gap-scans every keychain from index 0 — needed only on first run
+   * and recovery. Routine updates use the incremental sync, which asks about
+   * the revealed addresses only: seconds instead of a minute, and the
+   * pattern the wallet example follows (fullScan once, sync after).
+   */
   const scan = useCallback(
-    async (gen: number, network: NetworkId) => {
+    async (gen: number, network: NetworkId, deep = false) => {
       const wallet = walletRef.current;
       if (!wallet) return;
       setState((s) => ({ ...s, phase: { kind: 'scanning' } }));
@@ -142,12 +148,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       let ticks = 0;
       const beat = setInterval(() => ticks++, 100);
       try {
-        await wallet.fullScan({ stopGap: await gapFor(network) });
+        if (deep) {
+          await wallet.fullScan({ stopGap: await gapFor(network) });
+        } else {
+          await wallet.sync();
+        }
       } finally {
         clearInterval(beat);
         const ms = Date.now() - t0;
         console.log(
-          `[wallet] scan ${ms}ms, js ticks ${ticks}/${Math.floor(ms / 100)}`
+          `[wallet] ${deep ? 'fullScan' : 'sync'} ${ms}ms, js ticks ${ticks}/${Math.floor(ms / 100)}`
         );
       }
       if (generationRef.current !== gen) return;
@@ -187,7 +197,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, lastSyncedAt }));
         await readWallet(gen);
 
-        if (!lastSyncedAt || Date.now() - lastSyncedAt > STALE_AFTER_MS) {
+        if (!lastSyncedAt) {
+          await scan(gen, network, true); // never scanned: gap-scan once
+        } else if (Date.now() - lastSyncedAt > STALE_AFTER_MS) {
           await scan(gen, network);
         }
       } catch (e) {
@@ -320,7 +332,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         String(lastActiveExternal)
       );
     }
-    await scan(gen, network);
+    await scan(gen, network, true);
     return lastActiveExternal;
   }, [scan]);
 
